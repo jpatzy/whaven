@@ -14,6 +14,6 @@ sh whaven.sh snow city car
 
 ## A few notes
 
-1. If you don't use Gnome, you will have to add your own wallpaper utility.
+1. Only has commands for several wallpaper utilities. You may have to add your own.
 
 2. For now, the timer must be set inside the script.
