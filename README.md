@@ -4,16 +4,16 @@ Wallpaper script that downloads and sets a random wallpaper from Wallhaven. Keyw
 ## Usage
 To get a random wallpaper
 ```
-sh whaven.sh
+bash whaven.sh
 ```
 To get a random wallpapes based on keywords
 ```
-sh whaven.sh <keywords>
-sh whaven.sh snow city car
+bash whaven.sh <keywords>
+bash whaven.sh snow city car
 ```
 
 ## A few notes
 
-1. Only has commands for several wallpaper utilities. You may have to add your own.
+1. Only has commands for several wallpaper utilities (sway, feh and gnome). You may have to add your own.
 
 2. For now, the timer must be set inside the script.
