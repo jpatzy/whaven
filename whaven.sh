@@ -6,9 +6,9 @@
 # For now, interval must be set inside script
 
 #set -x # all executed commands are printed to the terminal
-#set -e # instructs bash to immediately exit if any command [1] has a non-zero exit status
+set -e # instructs bash to immediately exit if any command [1] has a non-zero exit status
 #set -u # a reference to any variable you haven't previously defined is an error, causes program to exit
-#set -o pipefail # prevents errors in a pipeline from being masked
+set -o pipefail # prevents errors in a pipeline from being masked
 IFS=$" "
 
 ### Command line arguments ###
@@ -39,73 +39,70 @@ sorting=random                              # date_added, relevance, random, vie
 interval=                                   # seconds between wallpaper transition
 API_URL="${api}apikey=${key}&q=${keywords}&categories=${categories}&purity=${purity}&ratios=${ratios}&sorting=${sorting}"
 
-### Set wallpaper function; add utility of choice ###
-if command -v sway > /dev/null 2>&1 ; then
-  set_wallpaper() { swaymsg output "*" bg "$wallpaper" fill; }
-elif command -v feh > /dev/null 2>&1 ; then
-  set_wallpaper() ( feh --bg-fill "$wallpaper"; )
-elif command -v gsettings > /dev/null 2>&1 ; then
-  WHICH_MODE=$(gsettings get org.gnome.desktop.interface color-scheme)
-  if [ "$WHICH_MODE" = "'prefer-dark'" ]; then
-    set_wallpaper() {
-      gsettings reset org.gnome.desktop.background picture-uri-dark
-      gsettings set org.gnome.desktop.background picture-uri-dark "$wallpaper"
-    }
-  elif [ "$WHICH_MODE" = "'default'" ]; then
-    set_wallpaper() {
-      gsettings reset org.gnome.desktop.background picture-uri
-      gsettings set org.gnome.desktop.background picture-uri "$wallpaper"
-    }
-  fi
-fi
-
 ####################################################################################
+
 # "-sS" hide progress bar but show errors
 # --connect-timeout (maximum time that you allow curl's connection to take
 # --max-time 10     (how long each retry will wait)
 # --retry 5         (it will retry 5 times)
-# --retry-delay 0   make curl sleep this amount of tie before each retry 
+# --retry-delay 0   (make curl sleep this amount of tie before each retry 
+
 # --retry-max-time  (total time before it's considered failed)
-
-API_CURL=$(curl -s --connect-timeout 5 --retry 1 --retry-delay 3 "$API_URL")
-#API_CURL=$(curl -s "$API_URL")
-####################################################################################
-
-# https://everything.curl.dev/usingcurl/returns
-EXIT_CODE=$?                                        # exit status of the last executed command
-if test "$EXIT_CODE" = "0"; then                    # if curl exit successfully
-  if [[ ! $API_CURL == *"path"* ]]; then            # if no full image path returns, then exit
-    echo "No Results!"
-    exit
-  fi
-fi
-
-# If curl does not exit successfully, maybe add loop to retry API_CURL
-# For now I'm instead using curl options to retry once on failure
-
-# ===== last working solution ===== #
-### Run first curl; check if a full url path is returned ###
-#API_CURL=$(curl -sS "$API_URL")
-#case "$API_CURL" in
-#  *path*) ;;
-#  *) echo "No results!" && exit ;;
-#esac
+# To limit  a  single  request's  maximum  time, use -m, --max-time.
+# Set this option to zero to not timeout retries.
 
 ###################################################################################
 
-### Download function; use jq if available ###
-if command -v jq > /dev/null 2>&1 ; then
-  dl_wallpaper() { echo "$API_CURL" | jq '[.data[] | .path] | .[0]' | xargs curl -s -o "$wallpaper"; }
+FIRST_CURL() { API_CURL=$(curl -s --max-time 10 --retry 2 --retry-delay 1 --retry-max-time 20 "$API_URL"); }
+
+### Consider trimming $API_CURL right away to store as smaller string, might be quicker?
+#API_CURL_TRIMMED="${API_CURL%%thumbs*}" # remove all after thumbs
+
+FIRST_CURL
+EXIT_CODE=$?                                        # exit status of the last executed command
+if test "$EXIT_CODE" = "0"; then                    # if curl exit successfully
+  if [[ $API_CURL == *"path"* ]]; then              # and if results contain full path url
+    if hash jq > /dev/null 2>&1 ; then              # then decide which function to define
+      dl_wallpaper () {
+        IMAGE_URL=$(echo "$API_CURL" | jq -r '[.data[] | .path] | .[0]')
+        curl -s "$IMAGE_URL" -o "$wallpaper"        # decided not to pipe jq output into curl with xargs
+      }	                                            # $API_CURL did not finish echo before being piped
+    else
+      dl_wallpaper() { trim="${API_CURL##*path}"; echo "$trim" | cut -c 4-59 | xargs curl -s -o "$wallpaper"; }
+    fi
+  else
+    echo "No Results!"                              # if $API_CURL does not return full path url
+    exit 0                                          # then exit
+  fi
 else
-  dl_wallpaper() { trim="${API_CURL##*path}"; echo "$trim" | cut -c 4-59 | xargs curl -s -o "$wallpaper"; }
+  exit 0                                            # if first curl EXIT_CODE is non-zero, then exit
+fi
+
+### Set wallpaper function; add utility of choice ###
+if hash sway > /dev/null 2>&1 ; then
+  set_wallpaper() { swaymsg output "*" bg "$wallpaper" fill; }
+elif hash feh > /dev/null 2>&1 ; then
+  set_wallpaper() ( feh --bg-fill "$wallpaper"; )
+elif hash gsettings > /dev/null 2>&1 ; then
+  WHICH_MODE=$(gsettings get org.gnome.desktop.interface color-scheme)
+  if [ "$WHICH_MODE" = "'prefer-dark'" ]; then
+    set_wallpaper() {
+      gsettings reset org.gnome.desktop.background picture-uri-dark && \
+      gsettings set org.gnome.desktop.background picture-uri-dark "$wallpaper"
+    }
+  elif [ "$WHICH_MODE" = "'default'" ]; then
+    set_wallpaper() {
+      gsettings reset org.gnome.desktop.background picture-uri && \
+      gsettings set org.gnome.desktop.background picture-uri "$wallpaper"
+    }
+  fi
 fi
 
 ### Backup, download, and set wallpaper; run timer if set ###
 if [ -n "$interval" ]; then
   while : ;
   do
-    bak_wallpaper && API_CURL=$(curl -s "$API_URL") # get new image url each cycle
-    dl_wallpaper && set_wallpaper
+    bak_wallpaper && FIRST_CURL && dl_wallpaper && set_wallpaper
     sleep "$interval"
   done
 else
