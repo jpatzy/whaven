@@ -49,7 +49,7 @@ API_URL="${api}apikey=${key}&q=${keywords}&categories=${categories}&purity=${pur
 # To limit  a  single  request's  maximum  time, use -m, --max-time.
 # Set this option to zero to not timeout retries.
 
-get_images() { API_CURL=$(curl -s --max-time 10 --retry 2 --retry-delay 1 --retry-max-time 20 "$API_URL"); }
+get_images() { API_CURL=$(curl -sS --max-time 10 --retry 2 --retry-delay 3 --retry-max-time 20 "$API_URL"); }
 
 ###################################################################################
 
@@ -63,10 +63,10 @@ if [[ "$EXIT_CODE" == "0" ]]; then                  # if curl exit successfully
     if hash jq > /dev/null 2>&1 ; then              # then decide which function to define
       dl_wallpaper() {
         IMAGE_URL=$(echo "$API_CURL" | jq -r '[.data[] | .path] | .[0]')
-        curl -s "$IMAGE_URL" -o "$wallpaper"        # xargs / curl was being run before $API_CURL finished
+        curl -sS "$IMAGE_URL" -o "$wallpaper"        # xargs / curl was being run before $API_CURL finished
       }                                             # being echoed.. why? changed to 2 line function to fix
     else
-      dl_wallpaper() { trim="${API_CURL##*path}"; echo "$trim" | cut -c 4-59 | xargs curl -s -o "$wallpaper"; }
+      dl_wallpaper() { trim="${API_CURL##*path}"; echo "$trim" | cut -c 4-59 | xargs curl -sS -o "$wallpaper"; }
     fi
   else
     echo "No Results!"                              # if $API_CURL does not return at least one full path url
