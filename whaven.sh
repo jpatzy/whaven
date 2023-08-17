@@ -12,7 +12,7 @@ set -o pipefail    # prevents errors in a pipeline from being masked
 IFS=$" "           #
 
 ### Command line arguments ###
-keywords=                          # added because "set -u" caused exit; "keywords" was not defined before usage
+keywords=                          # added because "set -u" caused exit; $keywords was not defined before usage
 for arg in "$@"; do
   #keywords="$keywords""$arg"+     # original sh line
   keywords+=${arg}+                # bash line
@@ -58,22 +58,22 @@ get_images() { API_CURL=$(curl -s --max-time 10 --retry 2 --retry-delay 1 --retr
 
 get_images
 EXIT_CODE=$?                                        # exit status of the last executed command
-if [[ "$EXIT_CODE" == "0" ]]; then                   # if curl exit successfully
+if [[ "$EXIT_CODE" == "0" ]]; then                  # if curl exit successfully
   if [[ $API_CURL == *"path"* ]]; then              # and if results contain full path url
     if hash jq > /dev/null 2>&1 ; then              # then decide which function to define
       dl_wallpaper() {
         IMAGE_URL=$(echo "$API_CURL" | jq -r '[.data[] | .path] | .[0]')
-        curl -s "$IMAGE_URL" -o "$wallpaper"        #             $API_CURL did not finish being echoed before being
-      }	                                            # piped to jq output into curl with xargs b/c
+        curl -s "$IMAGE_URL" -o "$wallpaper"        # xargs / curl was being run before $API_CURL finished
+      }                                             # being echoed.. why? changed to 2 line function to fix
     else
       dl_wallpaper() { trim="${API_CURL##*path}"; echo "$trim" | cut -c 4-59 | xargs curl -s -o "$wallpaper"; }
     fi
   else
-    echo "No Results!"                              # if $API_CURL does not return full path url
-    exit 0                                          # then exit
+    echo "No Results!"                              # if $API_CURL does not return at least one full path url
+    exit 0                                          # then there are no images results
   fi
 else
-  exit 0                                            # if first curl EXIT_CODE is non-zero, then exit
+  exit 0                                            # if get_images EXIT_CODE is non-zero, then exit
 fi
 
 ### Set wallpaper function; add utility of choice ###
@@ -83,12 +83,12 @@ elif hash feh > /dev/null 2>&1 ; then
   set_wallpaper() { feh --bg-fill "$wallpaper"; }
 elif hash gsettings > /dev/null 2>&1 ; then
   WHICH_MODE=$(gsettings get org.gnome.desktop.interface color-scheme)
-  if [[ "$WHICH_MODE" = "'prefer-dark'" ]]; then
+  if [[ "$WHICH_MODE" == "'prefer-dark'" ]]; then
     set_wallpaper() {
       gsettings reset org.gnome.desktop.background picture-uri-dark && \
       gsettings set org.gnome.desktop.background picture-uri-dark "$wallpaper"
     }
-  elif [[ "$WHICH_MODE" = "'default'" ]]; then
+  elif [[ "$WHICH_MODE" == "'default'" ]]; then
     set_wallpaper() {
       gsettings reset org.gnome.desktop.background picture-uri && \
       gsettings set org.gnome.desktop.background picture-uri "$wallpaper"
