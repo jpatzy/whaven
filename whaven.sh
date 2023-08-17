@@ -5,26 +5,24 @@
 # Requires: curl; Recommended: jq 
 # For now, interval must be set inside script
 
-#set -x # all executed commands are printed to the terminal
-set -e # instructs bash to immediately exit if any command [1] has a non-zero exit status
-#set -u # a reference to any variable you haven't previously defined is an error, causes program to exit
-set -o pipefail # prevents errors in a pipeline from being masked
-IFS=$" "
+#set -x            # all executed commands are printed to the terminal
+set -e             # instructs bash to immediately exit if any command [1] has a non-zero exit status
+#set -u            # a reference to any variable you haven't previously defined is an error, causes program to exit
+set -o pipefail    # prevents errors in a pipeline from being masked
+IFS=$" "           #
 
 ### Command line arguments ###
-keywords= # added because "set -u" caused exit; "keywords" was not defined before usage
+keywords=                          # added because "set -u" caused exit; "keywords" was not defined before usage
 for arg in "$@"; do
   #keywords="$keywords""$arg"+     # original sh line
   keywords+=${arg}+                # bash line
-  #keywords+="$arg"+               # alternative?
 done
-#echo "$keywords" #### quality check
 
 ### Setup file paths; backup function ###
 wallpaper="$HOME/.bg"
 wallpaper_backup="$HOME/.bg.old"
 bak_wallpaper() {
-  if [ -f "$wallpaper" ]; then
+  if [[ -f "$wallpaper" ]]; then
     mv -f "$wallpaper" "$wallpaper_backup"
   fi
 }
@@ -51,22 +49,22 @@ API_URL="${api}apikey=${key}&q=${keywords}&categories=${categories}&purity=${pur
 # To limit  a  single  request's  maximum  time, use -m, --max-time.
 # Set this option to zero to not timeout retries.
 
-###################################################################################
+get_images() { API_CURL=$(curl -s --max-time 10 --retry 2 --retry-delay 1 --retry-max-time 20 "$API_URL"); }
 
-FIRST_CURL() { API_CURL=$(curl -s --max-time 10 --retry 2 --retry-delay 1 --retry-max-time 20 "$API_URL"); }
+###################################################################################
 
 ### Consider trimming $API_CURL right away to store as smaller string, might be quicker?
 #API_CURL_TRIMMED="${API_CURL%%thumbs*}" # remove all after thumbs
 
-FIRST_CURL
+get_images
 EXIT_CODE=$?                                        # exit status of the last executed command
-if test "$EXIT_CODE" = "0"; then                    # if curl exit successfully
+if [[ "$EXIT_CODE" == "0" ]]; then                   # if curl exit successfully
   if [[ $API_CURL == *"path"* ]]; then              # and if results contain full path url
     if hash jq > /dev/null 2>&1 ; then              # then decide which function to define
-      dl_wallpaper () {
+      dl_wallpaper() {
         IMAGE_URL=$(echo "$API_CURL" | jq -r '[.data[] | .path] | .[0]')
-        curl -s "$IMAGE_URL" -o "$wallpaper"        # decided not to pipe jq output into curl with xargs
-      }	                                            # $API_CURL did not finish echo before being piped
+        curl -s "$IMAGE_URL" -o "$wallpaper"        #             $API_CURL did not finish being echoed before being
+      }	                                            # piped to jq output into curl with xargs b/c
     else
       dl_wallpaper() { trim="${API_CURL##*path}"; echo "$trim" | cut -c 4-59 | xargs curl -s -o "$wallpaper"; }
     fi
@@ -82,27 +80,29 @@ fi
 if hash sway > /dev/null 2>&1 ; then
   set_wallpaper() { swaymsg output "*" bg "$wallpaper" fill; }
 elif hash feh > /dev/null 2>&1 ; then
-  set_wallpaper() ( feh --bg-fill "$wallpaper"; )
+  set_wallpaper() { feh --bg-fill "$wallpaper"; }
 elif hash gsettings > /dev/null 2>&1 ; then
   WHICH_MODE=$(gsettings get org.gnome.desktop.interface color-scheme)
-  if [ "$WHICH_MODE" = "'prefer-dark'" ]; then
+  if [[ "$WHICH_MODE" = "'prefer-dark'" ]]; then
     set_wallpaper() {
       gsettings reset org.gnome.desktop.background picture-uri-dark && \
       gsettings set org.gnome.desktop.background picture-uri-dark "$wallpaper"
     }
-  elif [ "$WHICH_MODE" = "'default'" ]; then
+  elif [[ "$WHICH_MODE" = "'default'" ]]; then
     set_wallpaper() {
       gsettings reset org.gnome.desktop.background picture-uri && \
       gsettings set org.gnome.desktop.background picture-uri "$wallpaper"
     }
   fi
+else
+  echo "No wallpaper utility was found!!!"
 fi
 
 ### Backup, download, and set wallpaper; run timer if set ###
-if [ -n "$interval" ]; then
+if [[ -n "$interval" ]]; then
   while : ;
   do
-    bak_wallpaper && FIRST_CURL && dl_wallpaper && set_wallpaper
+    bak_wallpaper && get_images && dl_wallpaper && set_wallpaper
     sleep "$interval"
   done
 else
