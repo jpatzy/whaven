@@ -56,23 +56,28 @@ get_images() { API_CURL=$(curl -sS --max-time 10 --retry 2 --retry-delay 3 --ret
 ### Consider trimming $API_CURL right away to store as smaller string, might be quicker?
 #API_CURL_TRIMMED="${API_CURL%%thumbs*}" # remove all after thumbs
 
-get_images
+get_images                                          # first run to determine if keywords get results
+
 EXIT_CODE=$?                                        # exit status of the last executed command
 if [[ "$EXIT_CODE" == "0" ]]; then                  # if curl exit successfully
   if [[ $API_CURL == *"path"* ]]; then              # and if results contain full path url
     if hash jq > /dev/null 2>&1 ; then              # then decide which function to define
       dl_wallpaper() {
         IMAGE_URL=$(echo "$API_CURL" | jq -r '[.data[] | .path] | .[0]')
-        curl -sS "$IMAGE_URL" -o "$wallpaper"        # xargs / curl was being run before $API_CURL finished
-      }                                             # being echoed.. why? changed to 2 line function to fix
+        curl -sS --max-time 10 --retry 2 --retry-delay 3 --retry-max-time 20 "$IMAGE_URL" -o "$wallpaper"
+      } 
     else
-      dl_wallpaper() { trim="${API_CURL##*path}"; echo "$trim" | cut -c 4-59 | xargs curl -sS -o "$wallpaper"; }
+      dl_wallpaper() {
+	      trim="${API_CURL##*path}"
+	      echo "$trim" | cut -c 4-59 | xargs curl -sS --max-time 10 --retry 2 --retry-delay 3 --retry-max-time 20 -o "$wallpaper"
+      }
     fi
   else
     echo "No Results!"                              # if $API_CURL does not return at least one full path url
     exit 0                                          # then there are no images results
   fi
 else
+  echo "Curl failed"
   exit 0                                            # if get_images EXIT_CODE is non-zero, then exit
 fi
 
@@ -96,6 +101,7 @@ elif hash gsettings > /dev/null 2>&1 ; then
   fi
 else
   echo "No wallpaper utility was found!!!"
+  exit
 fi
 
 ### Backup, download, and set wallpaper; run timer if set ###
