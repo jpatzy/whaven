@@ -6,7 +6,7 @@
 # For now, interval must be set inside script
 
 #set -x            # all executed commands are printed to the terminal
-set -e             # instructs bash to immediately exit if any command [1] has a non-zero exit status
+#set -e            # instructs bash to immediately exit if any command [1] has a non-zero exit status
 #set -u            # a reference to any variable you haven't previously defined is an error, causes program to exit
 set -o pipefail    # prevents errors in a pipeline from being masked
 IFS=$" "           #
@@ -68,8 +68,8 @@ if [[ "$EXIT_CODE" == "0" ]]; then                  # if curl exit successfully
       } 
     else
       dl_wallpaper() {
-	      trim="${API_CURL##*path}"
-	      echo "$trim" | cut -c 4-59 | xargs curl -sS --max-time 10 --retry 2 --retry-delay 3 --retry-max-time 20 -o "$wallpaper"
+        trim="${API_CURL##*path}"
+	echo "$trim" | cut -c 4-59 | xargs curl -sS --max-time 10 --retry 2 --retry-delay 3 --retry-max-time 20 -o "$wallpaper"
       }
     fi
   else
